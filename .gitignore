@@ -1,0 +1,6 @@
+.env
+/storage/*
+!/storage/.gitignore
+.DS_Store
+.idea/
+.vscode/

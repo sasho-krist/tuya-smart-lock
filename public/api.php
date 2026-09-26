@@ -65,7 +65,7 @@ try {
         case 'lock':
             $service->operate($deviceId, $action === 'unlock');
             audit_log($action, $deviceId, 'ok');
-            respond(200, ['ok' => true, 'message' => $action === 'unlock' ? 'Бравата е отключена.' : 'Бравата е заключена.']);
+            respond(200, ['ok' => true, 'message' => $action === 'unlock' ? 'Командата за отключване е изпратена.' : 'Командата за заключване е изпратена.']);
 
         default:
             respond(400, ['ok' => false, 'error' => 'Непознато действие.']);

@@ -69,6 +69,36 @@ final class TuyaClient
         return $result['access_token'];
     }
 
+    /**
+     * ticket_key е криптиран с Client Secret (AES-256-ECB, hex). Декриптираният ключ криптира паролата
+     * с AES-ECB и PKCS7; резултатът е hex.
+     */
+    public function encryptLockPassword(string $password, string $ticketKeyHex): string
+    {
+        return self::encryptWithTicketKey($password, $ticketKeyHex, $this->clientSecret);
+    }
+
+    public static function encryptWithTicketKey(string $password, string $ticketKeyHex, string $secret): string
+    {
+        $encryptedKey = hex2bin($ticketKeyHex);
+        if ($encryptedKey === false) {
+            throw new TuyaException('Tuya: невалиден ticket_key.');
+        }
+
+        $key = openssl_decrypt($encryptedKey, 'aes-256-ecb', $secret, OPENSSL_RAW_DATA);
+        if ($key === false || ! in_array(strlen($key), [16, 32], true)) {
+            throw new TuyaException('Tuya: ticket_key не може да се декриптира. Проверете Client Secret.');
+        }
+
+        $cipher = strlen($key) === 16 ? 'aes-128-ecb' : 'aes-256-ecb';
+        $encrypted = openssl_encrypt($password, $cipher, $key, OPENSSL_RAW_DATA);
+        if ($encrypted === false) {
+            throw new TuyaException('Tuya: паролата не може да се криптира.');
+        }
+
+        return strtoupper(bin2hex($encrypted));
+    }
+
     public static function buildStringToSign(string $method, string $pathWithQuery, string $body): string
     {
         return strtoupper($method)."\n".hash('sha256', $body)."\n\n".$pathWithQuery;

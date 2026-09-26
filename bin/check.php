@@ -52,7 +52,16 @@ foreach ($devices as $id => $label) {
         return array_diff_key($info, array_flip(['local_key', 'ip', 'lat', 'lon', 'uid', 'owner_id', 'uuid']));
     });
     $step('Статус', static fn () => $client->request('GET', '/v1.0/devices/'.rawurlencode($id).'/status'));
+    $step('История: суров запис', static function () use ($client, $id): mixed {
+        $end = (int) round(microtime(true) * 1000);
+        $result = $client->request('GET', '/v1.0/devices/'.rawurlencode($id).'/door-lock/open-logs', [
+            'page_no' => 1, 'page_size' => 1, 'start_time' => $end - 7 * 86_400_000, 'end_time' => $end,
+        ]);
+
+        return is_array($result) && is_array($result['logs'] ?? null) ? ($result['logs'][0] ?? null) : $result;
+    });
     $step('История (7 дни)', static fn () => (new SmartLockService($client))->logs($id, 7, 5));
+    $step('Постоянни кодове', static fn () => (new SmartLockService($client))->passwords($id));
     $step('Ticket за отключване (не отключва)', static function () use ($client, $id): string {
         $ticket = $client->request('POST', '/v1.0/devices/'.rawurlencode($id).'/door-lock/password-ticket');
 

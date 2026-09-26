@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use SmartLock\Auth;
 use SmartLock\Env;
+use SmartLock\NameStore;
 use SmartLock\TuyaException;
 
 require __DIR__.'/../bootstrap.php';
@@ -46,7 +47,7 @@ if (! isset($devices[$deviceId])) {
     respond(404, ['ok' => false, 'error' => 'Непозната брава.']);
 }
 
-$isWrite = in_array($action, ['unlock', 'lock', 'temp-password'], true);
+$isWrite = in_array($action, ['unlock', 'lock', 'temp-password', 'password-create', 'password-delete', 'name-set'], true);
 if ($isWrite) {
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
         respond(405, ['ok' => false, 'error' => 'Използвайте POST.']);
@@ -54,6 +55,27 @@ if ($isWrite) {
     if (! Auth::validCsrf($_SERVER['HTTP_X_CSRF_TOKEN'] ?? null)) {
         respond(419, ['ok' => false, 'error' => 'Невалиден CSRF токен. Презаредете страницата.']);
     }
+}
+
+/** @return array<string, mixed> */
+function json_input(): array
+{
+    $input = json_decode((string) file_get_contents('php://input'), true);
+
+    return is_array($input) ? $input : [];
+}
+
+$names = new NameStore(STORAGE_DIR.'/names.json');
+
+if ($action === 'name-set') {
+    $input = json_input();
+    try {
+        $names->set($deviceId, (string) ($input['key'] ?? ''), (string) ($input['name'] ?? ''));
+    } catch (InvalidArgumentException $e) {
+        respond(422, ['ok' => false, 'error' => $e->getMessage()]);
+    }
+    audit_log($action, $deviceId, (string) ($input['key'] ?? '').' = '.(string) ($input['name'] ?? ''));
+    respond(200, ['ok' => true, 'names' => $names->all($deviceId)]);
 }
 
 try {
@@ -64,7 +86,41 @@ try {
             respond(200, ['ok' => true, 'lock' => $service->status($deviceId)]);
 
         case 'logs':
-            respond(200, ['ok' => true, 'logs' => $service->logs($deviceId)]);
+            respond(200, ['ok' => true, 'logs' => $service->logs($deviceId), 'names' => $names->all($deviceId)]);
+
+        case 'passwords':
+            respond(200, ['ok' => true, 'passwords' => $service->passwords($deviceId)]);
+
+        case 'password-create':
+            $input = json_input();
+            $name = trim(is_string($input['name'] ?? null) ? $input['name'] : '');
+            if ($name === '') {
+                respond(422, ['ok' => false, 'error' => 'Въведете име.']);
+            }
+            $name = mb_substr($name, 0, 30);
+
+            $password = is_string($input['password'] ?? null) ? trim($input['password']) : '';
+            if ($password === '') {
+                $password = (string) random_int(1_000_000, 9_999_999);
+            }
+            if (preg_match('/^\d{6,10}$/', $password) !== 1) {
+                respond(422, ['ok' => false, 'error' => 'Кодът трябва да е от 6 до 10 цифри.']);
+            }
+
+            $days = max(1, min(3650, (int) ($input['days'] ?? 1825)));
+            $from = time();
+            $id = $service->createPassword($deviceId, $name, $password, $from, $from + $days * 86400);
+            audit_log($action, $deviceId, "ok: {$name}, {$days} дни, id {$id}");
+            respond(200, ['ok' => true, 'password' => $password, 'id' => $id, 'valid_to' => $from + $days * 86400]);
+
+        case 'password-delete':
+            $passwordId = (string) (json_input()['id'] ?? '');
+            if (preg_match('/^[A-Za-z0-9_-]{1,64}$/', $passwordId) !== 1) {
+                respond(422, ['ok' => false, 'error' => 'Невалиден код.']);
+            }
+            $service->deletePassword($deviceId, $passwordId);
+            audit_log($action, $deviceId, "ok: id {$passwordId}");
+            respond(200, ['ok' => true]);
 
         case 'unlock':
         case 'lock':
@@ -73,8 +129,7 @@ try {
             respond(200, ['ok' => true, 'message' => $action === 'unlock' ? 'Командата за отключване е изпратена. Ако не се отключи, събудете бравата (докоснете клавиатурата) и опитайте пак.' : 'Командата за заключване е изпратена.']);
 
         case 'temp-password':
-            $input = json_decode((string) file_get_contents('php://input'), true);
-            $input = is_array($input) ? $input : [];
+            $input = json_input();
             $type = ($input['type'] ?? '') === 'multiple' ? 'multiple' : 'once';
             $hours = max(1, min(720, (int) ($input['hours'] ?? 24)));
             $name = trim(is_string($input['name'] ?? null) ? $input['name'] : '');

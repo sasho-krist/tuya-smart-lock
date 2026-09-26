@@ -8,6 +8,8 @@
 - отключва и заключва дистанционно без парола (ticket → `door-operate`, при грешка fallback към `open-door`);
 - показва историята на отключванията за последните 7 дни;
 - генерира офлайн временни пароли (еднократни или многократни) с бутони „Копирай“ и „Изпрати“;
+- добавя и изтрива потребители с постоянен код (криптиран с ticket_key, бравата го получава при събуждане);
+- позволява именуване на отпечатъци, карти и кодове, за да се вижда в историята кой е отключил (`storage/names.json`);
 - поддържа няколко брави;
 - защитава интерфейса с парола (bcrypt), CSRF и заключване след 5 грешни опита за 15 мин;
 - записва audit log на всяко отключване/заключване в `storage/audit.log`.
@@ -71,6 +73,10 @@ tests/run.php             тестове с fake transport
 | GET  | `api.php?action=logs&device=ID` | история на отключванията (7 дни) |
 | POST | `api.php?action=unlock&device=ID` | отключване |
 | POST | `api.php?action=lock&device=ID` | заключване (ако бравата го поддържа) |
+| GET  | `api.php?action=passwords&device=ID` | постоянни кодове, добавени през API |
+| POST | `api.php?action=password-create&device=ID` | нов постоянен код; body: `{"name": "Иван", "password": "1234567", "days": 1825}` (празна парола = случайна) |
+| POST | `api.php?action=password-delete&device=ID` | изтрива код; body: `{"id": "123"}` |
+| POST | `api.php?action=name-set&device=ID` | име за начин на отключване; body: `{"key": "unlock_fingerprint:11", "name": "Иван"}` (празно име = изтрий) |
 | POST | `api.php?action=temp-password&device=ID` | офлайн временна парола; JSON body: `{"type": "once"\|"multiple", "hours": 24, "name": "Куриер"}` |
 
 ## Използване от друг PHP код (напр. Laravel)

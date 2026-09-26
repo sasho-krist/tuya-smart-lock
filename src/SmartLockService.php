@@ -125,8 +125,11 @@ final class SmartLockService
                 continue;
             }
 
+            $statusRaw = $row['status'] ?? [];
+            $statusItems = is_array($statusRaw) && isset($statusRaw['code']) ? [$statusRaw] : $statusRaw;
+
             $events = [];
-            foreach (is_array($row['status'] ?? null) ? $row['status'] : [] as $s) {
+            foreach (is_array($statusItems) ? $statusItems : [] as $s) {
                 if (is_array($s) && is_string($s['code'] ?? null)) {
                     $events[$s['code']] = $s['value'] ?? null;
                 }
@@ -145,13 +148,76 @@ final class SmartLockService
         return $logs;
     }
 
+    /**
+     * Постоянен (многократен) код. Бравата го получава при следващото си събуждане.
+     */
+    public function createPassword(string $deviceId, string $name, string $password, int $validFrom, int $validTo): ?string
+    {
+        $ticket = $this->ticketData($deviceId);
+        if (! is_string($ticket['ticket_key'] ?? null)) {
+            throw new TuyaException('Tuya: не е получен ticket_key за бравата.');
+        }
+
+        $result = $this->client->request('POST', '/v1.0/devices/'.rawurlencode($deviceId).'/door-lock/temp-password', [], [
+            'name' => $name,
+            'password' => $this->client->encryptLockPassword($password, $ticket['ticket_key']),
+            'password_type' => 'ticket',
+            'ticket_id' => $ticket['ticket_id'],
+            'effective_time' => $validFrom,
+            'invalid_time' => $validTo,
+        ]);
+
+        $id = is_array($result) ? ($result['id'] ?? null) : $result;
+
+        return is_scalar($id) ? (string) $id : null;
+    }
+
+    /**
+     * @return list<array{id: string, name: string, valid_from: int|null, valid_to: int|null, phase: int|null}>
+     */
+    public function passwords(string $deviceId): array
+    {
+        $result = $this->client->request('GET', '/v1.0/devices/'.rawurlencode($deviceId).'/door-lock/temp-passwords');
+        $rows = is_array($result) && isset($result['list']) && is_array($result['list']) ? $result['list'] : $result;
+
+        $passwords = [];
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            if (! is_array($row) || ! is_scalar($row['id'] ?? null)) {
+                continue;
+            }
+
+            $passwords[] = [
+                'id' => (string) $row['id'],
+                'name' => is_string($row['name'] ?? null) ? $row['name'] : '',
+                'valid_from' => is_numeric($row['effective_time'] ?? null) ? (int) $row['effective_time'] : null,
+                'valid_to' => is_numeric($row['invalid_time'] ?? null) ? (int) $row['invalid_time'] : null,
+                'phase' => is_numeric($row['phase'] ?? null) ? (int) $row['phase'] : null,
+            ];
+        }
+
+        return $passwords;
+    }
+
+    public function deletePassword(string $deviceId, string $passwordId): void
+    {
+        $this->client->request('DELETE', '/v1.0/devices/'.rawurlencode($deviceId).'/door-lock/temp-passwords/'.rawurlencode($passwordId));
+    }
+
     private function ticket(string $deviceId): string
+    {
+        return $this->ticketData($deviceId)['ticket_id'];
+    }
+
+    /**
+     * @return array{ticket_id: string, ticket_key?: mixed}
+     */
+    private function ticketData(string $deviceId): array
     {
         $result = $this->client->request('POST', '/v1.0/devices/'.rawurlencode($deviceId).'/door-lock/password-ticket');
         if (! is_array($result) || ! is_string($result['ticket_id'] ?? null)) {
             throw new TuyaException('Tuya: не е получен ticket_id за бравата.');
         }
 
-        return $result['ticket_id'];
+        return $result;
     }
 }

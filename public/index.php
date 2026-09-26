@@ -63,6 +63,7 @@ $e = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
                 <button type="button" class="btn primary remote-only" data-action="unlock">Отключи</button>
                 <button type="button" class="btn remote-only" data-action="lock">Заключи</button>
                 <button type="button" class="btn primary" data-action="temp-password">Временна парола</button>
+                <button type="button" class="btn" data-action="users">Потребители</button>
                 <button type="button" class="btn ghost" data-action="refresh">Обнови</button>
                 <button type="button" class="btn ghost" data-action="logs">История</button>
             </div>
@@ -77,6 +78,24 @@ $e = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
                 <label>Валидна (часове) <input type="number" name="hours" min="1" max="720" value="24"></label>
                 <button type="submit" class="btn primary">Генерирай</button>
             </form>
+            <section class="users" hidden>
+                <h3>Потребители с постоянен код</h3>
+                <form class="user-form">
+                    <label>Име <input type="text" name="name" maxlength="30" required placeholder="напр. Иван"></label>
+                    <label>Код (6–10 цифри) <input type="text" name="password" inputmode="numeric" pattern="\d{6,10}" placeholder="празно = случаен"></label>
+                    <label>Валиден
+                        <select name="days">
+                            <option value="1">1 ден</option>
+                            <option value="7">7 дни</option>
+                            <option value="30">30 дни</option>
+                            <option value="365">1 година</option>
+                            <option value="1825" selected>5 години</option>
+                        </select>
+                    </label>
+                    <button type="submit" class="btn primary">Добави</button>
+                </form>
+                <ul class="users-list"></ul>
+            </section>
             <div class="temp-result" hidden>
                 <p class="muted">Парола:</p>
                 <p class="temp-password"></p>

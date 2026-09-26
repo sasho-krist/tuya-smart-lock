@@ -147,6 +147,67 @@ check('temp password: endpoint', str_ends_with($calls[1]['url'], '/v1.1/devices/
 check('temp password: часовете са на кръгъл час', $body === ['name' => 'Куриер', 'type' => 'once', 'effective_time' => 1789999200, 'invalid_time' => 1789999200 + 86400]);
 check('temp password: резултат', $pw['password'] === '12345678' && $pw['id'] === '99');
 
+echo "Постоянни кодове\n";
+$secret = str_repeat('s', 32);
+$realKey = '0123456789abcdef';
+$ticketKey = bin2hex((string) openssl_encrypt($realKey, 'aes-256-ecb', $secret, OPENSSL_RAW_DATA));
+$encrypted = TuyaClient::encryptWithTicketKey('1234567', $ticketKey, $secret);
+check('криптиране: hex и обратимо с декриптирания ключ', ctype_xdigit($encrypted)
+    && openssl_decrypt((string) hex2bin($encrypted), 'aes-128-ecb', $realKey, OPENSSL_RAW_DATA) === '1234567');
+
+$thrown = null;
+try {
+    TuyaClient::encryptWithTicketKey('1234567', $ticketKey, str_repeat('x', 32));
+} catch (TuyaException $e) {
+    $thrown = $e;
+}
+check('криптиране: грешен secret дава ясна грешка', $thrown !== null);
+
+$client = new TuyaClient('https://x.test', 'client-id', $secret, $tmp.'/token8.json', static function (string $method, string $url, array $headers, string $body) use (&$responses, &$calls): array {
+    $calls[] = compact('method', 'url', 'headers', 'body');
+
+    return ['status' => 200, 'body' => (string) json_encode(array_shift($responses))];
+});
+$responses = [
+    $tokenOk,
+    ['success' => true, 'result' => ['ticket_id' => 'T9', 'ticket_key' => $ticketKey]],
+    ['success' => true, 'result' => ['id' => 321]],
+];
+$calls = [];
+$id = (new SmartLockService($client))->createPassword('dev1', 'Иван', '1234567', 1790000000, 1790086400);
+$body = json_decode($calls[2]['body'], true);
+check('create: endpoint и id', str_ends_with($calls[2]['url'], '/v1.0/devices/dev1/door-lock/temp-password') && $id === '321');
+check('create: body с криптирана парола', is_array($body) && $body['password'] === $encrypted && $body['password_type'] === 'ticket'
+    && $body['ticket_id'] === 'T9' && $body['effective_time'] === 1790000000 && $body['invalid_time'] === 1790086400 && $body['name'] === 'Иван');
+
+$responses = [
+    ['success' => true, 'result' => [['id' => 5, 'name' => 'Иван', 'effective_time' => 1, 'invalid_time' => 2, 'phase' => 2], ['foo' => 'bar']]],
+    ['success' => true, 'result' => true],
+];
+$calls = [];
+$service = new SmartLockService($client);
+check('list: парсване', $service->passwords('dev1') === [['id' => '5', 'name' => 'Иван', 'valid_from' => 1, 'valid_to' => 2, 'phase' => 2]]);
+$service->deletePassword('dev1', '5');
+check('delete: метод и път', $calls[1]['method'] === 'DELETE' && str_ends_with($calls[1]['url'], '/door-lock/temp-passwords/5'));
+
+$responses = [['success' => true, 'result' => ['logs' => [['update_time' => 1, 'status' => ['code' => 'unlock_card', 'value' => 3]]]]]];
+$calls = [];
+check('logs: status като обект', $service->logs('dev1')[0]['events'] === ['unlock_card' => 3]);
+
+echo "Имена\n";
+$store = new SmartLock\NameStore($tmp.'/names.json');
+$store->set('dev1', 'unlock_fingerprint:11', ' Иван ');
+$store->set('dev1', 'unlock_card:3', 'Мария');
+$store->set('dev1', 'unlock_card:3', '');
+check('names: запис и изтриване', $store->all('dev1') === ['unlock_fingerprint:11' => 'Иван'] && $store->all('dev2') === []);
+$thrown = null;
+try {
+    $store->set('dev1', '../etc', 'x');
+} catch (InvalidArgumentException $e) {
+    $thrown = $e;
+}
+check('names: невалиден ключ', $thrown !== null);
+
 array_map('unlink', glob($tmp.'/*') ?: []);
 rmdir($tmp);
 

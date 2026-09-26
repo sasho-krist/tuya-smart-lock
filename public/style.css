@@ -82,9 +82,9 @@ h2 { font-size: 1.15rem; margin: 0; }
 
 .logout { text-align: right; }
 
-.temp-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 12px; align-items: end; }
-.temp-form label { display: flex; flex-direction: column; gap: 4px; font-size: .9rem; color: var(--muted); }
-.temp-form input, .temp-form select {
+.temp-form, .user-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 12px; align-items: end; }
+.temp-form label, .user-form label { display: flex; flex-direction: column; gap: 4px; font-size: .9rem; color: var(--muted); }
+.temp-form input, .temp-form select, .user-form input, .user-form select {
     padding: 8px;
     font-size: 1rem;
     border: 1px solid var(--border);
@@ -96,3 +96,9 @@ h2 { font-size: 1.15rem; margin: 0; }
 .temp-result p { margin: 0 0 6px; }
 .temp-password { font-size: 2rem; font-weight: 700; letter-spacing: .15em; font-variant-numeric: tabular-nums; }
 [hidden] { display: none !important; }
+
+.users { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.users h3 { font-size: 1rem; margin: 0 0 8px; }
+.users-list { margin: 12px 0 0; padding-left: 18px; }
+.btn-link { margin-left: 8px; background: none; border: 0; padding: 0; color: var(--primary); cursor: pointer; font-size: .85rem; text-decoration: underline; }
+.btn-link.danger { color: var(--off); }

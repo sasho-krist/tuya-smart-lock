@@ -60,10 +60,31 @@ $e = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
             </header>
             <p class="muted">Батерия: <strong class="lock-battery">—</strong></p>
             <div class="actions">
-                <button type="button" class="btn primary" data-action="unlock">Отключи</button>
-                <button type="button" class="btn" data-action="lock">Заключи</button>
+                <button type="button" class="btn primary remote-only" data-action="unlock">Отключи</button>
+                <button type="button" class="btn remote-only" data-action="lock">Заключи</button>
+                <button type="button" class="btn primary" data-action="temp-password">Временна парола</button>
                 <button type="button" class="btn ghost" data-action="refresh">Обнови</button>
                 <button type="button" class="btn ghost" data-action="logs">История</button>
+            </div>
+            <form class="temp-form" hidden>
+                <label>Име <input type="text" name="name" maxlength="30" placeholder="напр. Куриер"></label>
+                <label>Вид
+                    <select name="type">
+                        <option value="once">Еднократна</option>
+                        <option value="multiple">Многократна</option>
+                    </select>
+                </label>
+                <label>Валидна (часове) <input type="number" name="hours" min="1" max="720" value="24"></label>
+                <button type="submit" class="btn primary">Генерирай</button>
+            </form>
+            <div class="temp-result" hidden>
+                <p class="muted">Парола:</p>
+                <p class="temp-password"></p>
+                <p class="muted temp-valid"></p>
+                <div class="actions">
+                    <button type="button" class="btn" data-action="copy">Копирай</button>
+                    <button type="button" class="btn" data-action="share">Изпрати</button>
+                </div>
             </div>
             <p class="lock-message" role="status"></p>
             <ul class="lock-logs"></ul>

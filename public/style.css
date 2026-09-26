@@ -81,3 +81,18 @@ h2 { font-size: 1.15rem; margin: 0; }
 .lock-logs li { margin-bottom: 4px; }
 
 .logout { text-align: right; }
+
+.temp-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 12px; align-items: end; }
+.temp-form label { display: flex; flex-direction: column; gap: 4px; font-size: .9rem; color: var(--muted); }
+.temp-form input, .temp-form select {
+    padding: 8px;
+    font-size: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+}
+.temp-result { margin-top: 12px; padding: 12px; border: 1px dashed var(--border); border-radius: 8px; }
+.temp-result p { margin: 0 0 6px; }
+.temp-password { font-size: 2rem; font-weight: 700; letter-spacing: .15em; font-variant-numeric: tabular-nums; }
+[hidden] { display: none !important; }

@@ -5,14 +5,17 @@
     const container = document.getElementById('locks');
     const template = document.getElementById('lock-template');
 
-    async function api(action, deviceId = null, method = 'GET') {
+    let remoteUnlock = true;
+
+    async function api(action, deviceId = null, method = 'GET', body = null) {
         const params = new URLSearchParams({ action });
         if (deviceId) params.set('device', deviceId);
 
         const response = await fetch(`api.php?${params}`, {
             method,
-            headers: { 'X-CSRF-Token': csrf, Accept: 'application/json' },
+            headers: { 'X-CSRF-Token': csrf, Accept: 'application/json', 'Content-Type': 'application/json' },
             credentials: 'same-origin',
+            body: body ? JSON.stringify(body) : null,
         });
 
         if (response.status === 401) {
@@ -91,9 +94,70 @@
         }
     }
 
+    function formatDate(seconds) {
+        return new Date(seconds * 1000).toLocaleString('bg-BG', { dateStyle: 'short', timeStyle: 'short' });
+    }
+
+    function shareText(card) {
+        const password = card.querySelector('.temp-password').textContent;
+        const valid = card.querySelector('.temp-valid').textContent;
+        return `Код за вратата: ${password}\n${valid}`;
+    }
+
+    async function generatePassword(card, deviceId, form) {
+        const button = form.querySelector('button[type="submit"]');
+        button.disabled = true;
+        setMessage(card, 'Генериране…');
+        try {
+            const data = Object.fromEntries(new FormData(form));
+            const { password } = await api('temp-password', deviceId, 'POST', {
+                name: data.name,
+                type: data.type,
+                hours: Number(data.hours),
+            });
+            card.querySelector('.temp-password').textContent = password.password;
+            card.querySelector('.temp-valid').textContent =
+                `${password.type === 'once' ? 'Еднократна' : 'Многократна'}, валидна от ${formatDate(password.valid_from)} до ${formatDate(password.valid_to)}`;
+            card.querySelector('.temp-result').hidden = false;
+            setMessage(card, '');
+        } catch (err) {
+            setMessage(card, err.message, 'error');
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    async function copyPassword(card) {
+        try {
+            await navigator.clipboard.writeText(shareText(card));
+            setMessage(card, 'Копирано.', 'success');
+        } catch {
+            setMessage(card, 'Копирането не е разрешено от браузъра.', 'error');
+        }
+    }
+
+    async function sharePassword(card) {
+        if (!navigator.share) {
+            copyPassword(card);
+            return;
+        }
+        try {
+            await navigator.share({ text: shareText(card) });
+        } catch {
+            // потребителят е затворил менюто за споделяне
+        }
+    }
+
     function renderLock(device) {
         const card = template.content.firstElementChild.cloneNode(true);
         card.querySelector('.lock-name').textContent = device.label;
+        if (!remoteUnlock) card.querySelectorAll('.remote-only').forEach((el) => el.remove());
+
+        const form = card.querySelector('.temp-form');
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            generatePassword(card, device.id, form);
+        });
 
         card.addEventListener('click', (event) => {
             const button = event.target.closest('button[data-action]');
@@ -102,6 +166,9 @@
             const action = button.dataset.action;
             if (action === 'refresh') refresh(card, device.id);
             else if (action === 'logs') showLogs(card, device.id);
+            else if (action === 'temp-password') form.hidden = !form.hidden;
+            else if (action === 'copy') copyPassword(card);
+            else if (action === 'share') sharePassword(card);
             else operate(card, device.id, action, button);
         });
 
@@ -110,7 +177,8 @@
     }
 
     api('devices')
-        .then(({ devices }) => {
+        .then(({ devices, remote_unlock: remote }) => {
+            remoteUnlock = remote !== false;
             container.innerHTML = '';
             if (devices.length === 0) {
                 container.innerHTML = '<p class="muted">Няма конфигурирани брави (TUYA_DEVICE_IDS в .env).</p>';

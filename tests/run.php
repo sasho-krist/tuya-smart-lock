@@ -136,6 +136,17 @@ $logs = (new SmartLockService(fakeClient($responses, $calls, $tmp.'/token6.json'
 check('logs: парсване', $logs === [['time' => 1700000000000, 'user' => 'Иван', 'events' => ['unlock_fingerprint' => 3]]]);
 check('logs: query е сортиран и подписан', str_contains($calls[1]['url'], '/open-logs?end_time='));
 
+$responses = [
+    $tokenOk,
+    ['success' => true, 'result' => ['offline_temp_password' => '12345678', 'offline_temp_password_id' => 99]],
+];
+$calls = [];
+$pw = (new SmartLockService(fakeClient($responses, $calls, $tmp.'/token7.json')))->offlinePassword('dev1', 'once', 'Куриер', 24, 1790000123);
+$body = json_decode($calls[1]['body'], true);
+check('temp password: endpoint', str_ends_with($calls[1]['url'], '/v1.1/devices/dev1/door-lock/offline-temp-password') && $calls[1]['method'] === 'POST');
+check('temp password: часовете са на кръгъл час', $body === ['name' => 'Куриер', 'type' => 'once', 'effective_time' => 1789999200, 'invalid_time' => 1789999200 + 86400]);
+check('temp password: резултат', $pw['password'] === '12345678' && $pw['id'] === '99');
+
 array_map('unlink', glob($tmp.'/*') ?: []);
 rmdir($tmp);
 

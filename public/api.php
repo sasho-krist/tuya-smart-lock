@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use SmartLock\Auth;
+use SmartLock\Env;
 use SmartLock\TuyaException;
 
 require __DIR__.'/../bootstrap.php';
@@ -33,7 +34,11 @@ if ($action === 'devices') {
     foreach ($devices as $id => $label) {
         $list[] = ['id' => $id, 'label' => $label];
     }
-    respond(200, ['ok' => true, 'devices' => $list]);
+    respond(200, [
+        'ok' => true,
+        'devices' => $list,
+        'remote_unlock' => filter_var(Env::get('TUYA_REMOTE_UNLOCK', 'true'), FILTER_VALIDATE_BOOLEAN),
+    ]);
 }
 
 $deviceId = (string) ($_GET['device'] ?? '');
@@ -41,7 +46,7 @@ if (! isset($devices[$deviceId])) {
     respond(404, ['ok' => false, 'error' => 'Непозната брава.']);
 }
 
-$isWrite = in_array($action, ['unlock', 'lock'], true);
+$isWrite = in_array($action, ['unlock', 'lock', 'temp-password'], true);
 if ($isWrite) {
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
         respond(405, ['ok' => false, 'error' => 'Използвайте POST.']);
@@ -66,6 +71,18 @@ try {
             $service->operate($deviceId, $action === 'unlock');
             audit_log($action, $deviceId, 'ok');
             respond(200, ['ok' => true, 'message' => $action === 'unlock' ? 'Командата за отключване е изпратена.' : 'Командата за заключване е изпратена.']);
+
+        case 'temp-password':
+            $input = json_decode((string) file_get_contents('php://input'), true);
+            $input = is_array($input) ? $input : [];
+            $type = ($input['type'] ?? '') === 'multiple' ? 'multiple' : 'once';
+            $hours = max(1, min(720, (int) ($input['hours'] ?? 24)));
+            $name = trim(is_string($input['name'] ?? null) ? $input['name'] : '');
+            $name = mb_substr($name !== '' ? $name : 'Гост', 0, 30);
+
+            $password = $service->offlinePassword($deviceId, $type, $name, $hours);
+            audit_log($action, $deviceId, "ok: {$type}, {$hours}ч, {$name}");
+            respond(200, ['ok' => true, 'password' => $password]);
 
         default:
             respond(400, ['ok' => false, 'error' => 'Непознато действие.']);

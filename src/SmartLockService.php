@@ -69,6 +69,42 @@ final class SmartLockService
     }
 
     /**
+     * Офлайн временна парола: изчислява се в cloud-а, бравата я приема без да е онлайн.
+     * Tuya изисква началото и краят да са на кръгъл час.
+     *
+     * @param  'once'|'multiple'  $type
+     * @return array{password: string, id: string|null, type: string, valid_from: int, valid_to: int}
+     */
+    public function offlinePassword(string $deviceId, string $type, string $name, int $hours, ?int $now = null): array
+    {
+        $now ??= time();
+        $from = intdiv($now, 3600) * 3600;
+        $to = $from + max(1, $hours) * 3600;
+
+        $result = $this->client->request('POST', '/v1.1/devices/'.rawurlencode($deviceId).'/door-lock/offline-temp-password', [], [
+            'name' => $name,
+            'type' => $type,
+            'effective_time' => $from,
+            'invalid_time' => $to,
+        ]);
+
+        $password = is_array($result) ? ($result['offline_temp_password'] ?? $result['password'] ?? null) : null;
+        if (! is_string($password) && ! is_int($password)) {
+            throw new TuyaException('Tuya: не е върната парола.');
+        }
+
+        $id = is_array($result) ? ($result['offline_temp_password_id'] ?? $result['id'] ?? null) : null;
+
+        return [
+            'password' => (string) $password,
+            'id' => is_scalar($id) ? (string) $id : null,
+            'type' => $type,
+            'valid_from' => $from,
+            'valid_to' => $to,
+        ];
+    }
+
+    /**
      * @return list<array{time: int|null, user: string|null, events: array<string, mixed>}>
      */
     public function logs(string $deviceId, int $days = 7, int $limit = 30): array

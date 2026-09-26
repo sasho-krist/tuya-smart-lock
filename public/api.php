@@ -70,7 +70,7 @@ try {
         case 'lock':
             $service->operate($deviceId, $action === 'unlock');
             audit_log($action, $deviceId, 'ok');
-            respond(200, ['ok' => true, 'message' => $action === 'unlock' ? 'Командата за отключване е изпратена.' : 'Командата за заключване е изпратена.']);
+            respond(200, ['ok' => true, 'message' => $action === 'unlock' ? 'Командата за отключване е изпратена. Ако не се отключи, събудете бравата (докоснете клавиатурата) и опитайте пак.' : 'Командата за заключване е изпратена.']);
 
         case 'temp-password':
             $input = json_decode((string) file_get_contents('php://input'), true);

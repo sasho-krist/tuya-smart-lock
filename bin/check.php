@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use SmartLock\Env;
+use SmartLock\SmartLockService;
 use SmartLock\TuyaClient;
 
 if (PHP_SAPI !== 'cli') {
@@ -41,7 +42,20 @@ if ($devices === []) {
 
 foreach ($devices as $id => $label) {
     echo "\n== {$label}: '{$id}' (".strlen($id)." символа)\n";
-    $step('Информация за устройството', static fn () => $client->request('GET', '/v1.0/devices/'.rawurlencode($id)));
+    $step('Информация за устройството', static function () use ($client, $id): mixed {
+        $info = $client->request('GET', '/v1.0/devices/'.rawurlencode($id));
+        if (! is_array($info)) {
+            return $info;
+        }
+        unset($info['status']);
+
+        return array_diff_key($info, array_flip(['local_key', 'ip', 'lat', 'lon', 'uid', 'owner_id', 'uuid']));
+    });
     $step('Статус', static fn () => $client->request('GET', '/v1.0/devices/'.rawurlencode($id).'/status'));
-    $step('Функции', static fn () => $client->request('GET', '/v1.0/devices/'.rawurlencode($id).'/functions'));
+    $step('История (7 дни)', static fn () => (new SmartLockService($client))->logs($id, 7, 5));
+    $step('Ticket за отключване (не отключва)', static function () use ($client, $id): string {
+        $ticket = $client->request('POST', '/v1.0/devices/'.rawurlencode($id).'/door-lock/password-ticket');
+
+        return is_array($ticket) && isset($ticket['ticket_id']) ? 'ticket получен' : 'неочакван отговор';
+    });
 }

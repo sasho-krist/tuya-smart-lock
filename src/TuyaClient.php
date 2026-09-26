@@ -136,7 +136,7 @@ final class TuyaClient
             $code = (int) ($decoded['code'] ?? 0);
             $msg = is_string($decoded['msg'] ?? null) ? $decoded['msg'] : 'unknown error';
 
-            throw new TuyaException("Tuya грешка {$code}: {$msg}", $code);
+            throw new TuyaException("Tuya грешка {$code}: {$msg} [{$method} {$path}]", $code);
         }
 
         return $decoded['result'] ?? null;

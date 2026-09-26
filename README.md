@@ -28,6 +28,7 @@
 cp .env.example .env
 php bin/hash-password.php          # генерира APP_PASSWORD_HASH за .env
 php tests/run.php                  # тестове (без мрежа)
+php bin/check.php                  # проверка на връзката с Tuya и бравите
 php -S 127.0.0.1:8000 -t public    # локално: http://127.0.0.1:8000
 ```
 

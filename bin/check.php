@@ -70,6 +70,22 @@ foreach ($devices as $id => $label) {
             ]);
         });
     }
+    $step('Ключ за криптиране на кодове (без да се показва)', static function () use ($client, $id): array {
+        $ticket = $client->request('POST', '/v1.0/devices/'.rawurlencode($id).'/door-lock/password-ticket');
+        $ticketKey = is_array($ticket) && is_string($ticket['ticket_key'] ?? null) ? $ticket['ticket_key'] : '';
+        $raw = hex2bin($ticketKey);
+        $secret = Env::required('TUYA_CLIENT_SECRET');
+        $key = $raw === false ? false : openssl_decrypt($raw, 'aes-256-ecb', $secret, OPENSSL_RAW_DATA);
+
+        return [
+            'ticket_key: дължина' => strlen($ticketKey),
+            'ticket_key: hex' => ctype_xdigit($ticketKey),
+            'декриптиран ключ: дължина' => $key === false ? 'грешка при декриптиране' : strlen($key),
+            'декриптиран ключ: само hex символи' => $key !== false && ctype_xdigit($key),
+            'декриптиран ключ: само видими символи' => $key !== false && ctype_print($key),
+            'secret: дължина' => strlen($secret),
+        ];
+    });
     $step('Постоянни кодове', static fn () => (new SmartLockService($client))->passwords($id));
     $step('Ticket за отключване (не отключва)', static function () use ($client, $id): string {
         $ticket = $client->request('POST', '/v1.0/devices/'.rawurlencode($id).'/door-lock/password-ticket');

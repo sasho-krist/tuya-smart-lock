@@ -85,7 +85,7 @@ tests/run.php             тестове с fake transport
 | POST | `api.php?action=unlock&device=ID` | отключване |
 | POST | `api.php?action=lock&device=ID` | заключване (ако бравата го поддържа) |
 | GET  | `api.php?action=passwords&device=ID` | постоянни кодове, добавени през API |
-| POST | `api.php?action=password-create&device=ID` | нов постоянен код; body: `{"name": "Иван", "password": "1234567", "days": 1825}` (точно `TUYA_PASSWORD_LENGTH` цифри, по подразбиране 6; празна парола = случайна) |
+| POST | `api.php?action=password-create&device=ID` | нов постоянен код; body: `{"name": "Иван", "password": "1234567", "days": 1825}` (точно `TUYA_PASSWORD_LENGTH` цифри, по подразбиране 7; празна парола = случайна) |
 | POST | `api.php?action=password-delete&device=ID` | изтрива код; body: `{"id": "123"}` |
 | POST | `api.php?action=name-set&device=ID` | име за начин на отключване; body: `{"key": "unlock_fingerprint:11", "name": "Иван"}` (празно име = изтрий) |
 | POST | `api.php?action=reply-request&device=ID` | отговор на заявка от вратата; body: `{"approve": true}` (само докато бравата чака) |

@@ -89,7 +89,7 @@ $e = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
                 <h3>Потребители с постоянен код</h3>
                 <form class="user-form">
                     <label>Име <input type="text" name="name" maxlength="30" required placeholder="напр. Иван"></label>
-                    <label>Код (6–10 цифри) <input type="text" name="password" inputmode="numeric" pattern="\d{6,10}" placeholder="празно = случаен"></label>
+                    <label>Код (<?= password_length() ?> цифри) <input type="text" name="password" inputmode="numeric" pattern="\d{<?= password_length() ?>}" maxlength="<?= password_length() ?>" placeholder="празно = случаен"></label>
                     <label>Валиден
                         <select name="days">
                             <option value="1">1 ден</option>

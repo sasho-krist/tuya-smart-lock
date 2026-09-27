@@ -40,6 +40,11 @@ function lock_devices(): array
     return $devices;
 }
 
+function password_length(): int
+{
+    return max(4, min(12, (int) Env::get('TUYA_PASSWORD_LENGTH', '7')));
+}
+
 function lock_service(): SmartLockService
 {
     $client = new TuyaClient(

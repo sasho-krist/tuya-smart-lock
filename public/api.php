@@ -39,6 +39,7 @@ if ($action === 'devices') {
         'ok' => true,
         'devices' => $list,
         'remote_unlock' => filter_var(Env::get('TUYA_REMOTE_UNLOCK', 'true'), FILTER_VALIDATE_BOOLEAN),
+        'password_length' => password_length(),
     ]);
 }
 
@@ -106,11 +107,12 @@ try {
             $name = mb_substr($name, 0, 30);
 
             $password = is_string($input['password'] ?? null) ? trim($input['password']) : '';
+            $length = password_length();
             if ($password === '') {
-                $password = (string) random_int(1_000_000, 9_999_999);
+                $password = (string) random_int(10 ** ($length - 1), 10 ** $length - 1);
             }
-            if (preg_match('/^\d{6,10}$/', $password) !== 1) {
-                respond(422, ['ok' => false, 'error' => 'Кодът трябва да е от 6 до 10 цифри.']);
+            if (preg_match('/^\d{'.$length.'}$/', $password) !== 1) {
+                respond(422, ['ok' => false, 'error' => "Кодът трябва да е точно {$length} цифри."]);
             }
 
             $days = max(1, min(3650, (int) ($input['days'] ?? 1825)));

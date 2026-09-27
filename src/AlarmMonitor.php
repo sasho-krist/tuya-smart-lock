@@ -70,11 +70,35 @@ final class AlarmMonitor
             return $events;
         }
 
+        $since = (int) ($device['last_time'] ?? $nowMs);
+        $errors = [];
+        $reports = null;
+        $source = '';
+
+        // 1) последните стойности с времето им: нов wrong_finger сменя времето, дори стойността да е същата
         try {
-            $reports = $this->reportsFromLogs($deviceId, (int) ($device['last_time'] ?? $nowMs), $nowMs);
-            $this->lastRun = ['source' => 'logs', 'error' => null, 'reports' => $reports];
-            $lastTime = $reports === [] ? $nowMs : max($nowMs, max(array_column($reports, 'time')));
+            [$reports, $device['times']] = $this->reportsFromShadow($deviceId, is_array($device['times'] ?? null) ? $device['times'] : null);
+            $source = 'shadow';
         } catch (TuyaException $e) {
+            $errors[] = 'shadow: '.$e->getMessage();
+        }
+
+        // 2) лог на отчетите (всяко събитие поотделно)
+        if ($reports === null) {
+            foreach (['report-logs' => fn (): array => $this->reportsFromReportLogs($deviceId, $since, $nowMs),
+                'logs' => fn (): array => $this->reportsFromLogs($deviceId, $since, $nowMs)] as $name => $fetch) {
+                try {
+                    $reports = $fetch();
+                    $source = $name;
+                    break;
+                } catch (TuyaException $e) {
+                    $errors[] = $name.': '.$e->getMessage();
+                }
+            }
+        }
+
+        // 3) сравнение със статуса от предишната проверка
+        if ($reports === null) {
             $status = $this->currentStatus($deviceId);
             $previous = is_array($device['status'] ?? null) ? $device['status'] : [];
             $reports = [];
@@ -85,9 +109,11 @@ final class AlarmMonitor
                 }
             }
             $device['status'] = $status;
-            $lastTime = $nowMs;
-            $this->lastRun = ['source' => 'status', 'error' => $e->getMessage(), 'reports' => $reports];
+            $source = 'status';
         }
+
+        $this->lastRun = ['source' => $source, 'error' => $errors === [] ? null : implode(' | ', $errors), 'reports' => $reports];
+        $lastTime = $reports === [] ? $nowMs : max($nowMs, max(array_column($reports, 'time')));
 
         $events = [];
         $batteryLow = (bool) ($device['battery_low'] ?? false);
@@ -147,6 +173,57 @@ final class AlarmMonitor
     }
 
     /**
+     * @param  array<string, int>|null  $knownTimes  код => време на последния видян отчет (null = първо пускане)
+     * @return array{0: list<array{time: int, code: string, value: mixed}>, 1: array<string, int>}
+     */
+    private function reportsFromShadow(string $deviceId, ?array $knownTimes): array
+    {
+        $result = $this->client->request('GET', '/v2.0/cloud/thing/'.rawurlencode($deviceId).'/shadow/properties', [
+            'codes' => implode(',', self::CODES),
+        ]);
+
+        $properties = is_array($result) && is_array($result['properties'] ?? null) ? $result['properties'] : null;
+        if ($properties === null) {
+            throw new TuyaException('shadow: неочакван отговор');
+        }
+
+        $reports = [];
+        $times = $knownTimes ?? [];
+        foreach ($properties as $prop) {
+            if (! is_array($prop) || ! is_string($prop['code'] ?? null) || ! is_numeric($prop['time'] ?? null)) {
+                continue;
+            }
+            $code = $prop['code'];
+            $time = (int) $prop['time'];
+            $isBattery = in_array($code, ['battery_state', 'residual_electricity'], true);
+
+            if ($knownTimes !== null && ($time > ($knownTimes[$code] ?? 0) || $isBattery)) {
+                $reports[] = ['time' => $time, 'code' => $code, 'value' => $prop['value'] ?? null];
+            }
+            $times[$code] = max($time, $times[$code] ?? 0);
+        }
+
+        usort($reports, static fn (array $a, array $b): int => $a['time'] <=> $b['time']);
+
+        return [$reports, $times];
+    }
+
+    /**
+     * @return list<array{time: int, code: string, value: mixed}>
+     */
+    private function reportsFromReportLogs(string $deviceId, int $fromMs, int $toMs): array
+    {
+        $result = $this->client->request('GET', '/v2.0/cloud/thing/'.rawurlencode($deviceId).'/report-logs', [
+            'codes' => implode(',', self::CODES),
+            'start_time' => $fromMs + 1,
+            'end_time' => $toMs,
+            'size' => 100,
+        ]);
+
+        return self::parseLogs($result);
+    }
+
+    /**
      * @return list<array{time: int, code: string, value: mixed}>
      */
     private function reportsFromLogs(string $deviceId, int $fromMs, int $toMs): array
@@ -156,11 +233,22 @@ final class AlarmMonitor
             'codes' => implode(',', self::CODES),
             'start_time' => $fromMs + 1,
             'end_time' => $toMs,
-            'size' => 100,
         ]);
 
+        return self::parseLogs($result);
+    }
+
+    /**
+     * @return list<array{time: int, code: string, value: mixed}>
+     */
+    private static function parseLogs(mixed $result): array
+    {
+        if (! is_array($result) || ! is_array($result['logs'] ?? null)) {
+            throw new TuyaException('logs: неочакван отговор');
+        }
+
         $reports = [];
-        foreach (is_array($result) && is_array($result['logs'] ?? null) ? $result['logs'] : [] as $log) {
+        foreach ($result['logs'] as $log) {
             if (! is_array($log) || ! is_string($log['code'] ?? null) || ! is_numeric($log['event_time'] ?? null)) {
                 continue;
             }

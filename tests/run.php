@@ -227,34 +227,69 @@ check('monitor: първо пускане не праща стари аларм�
 $lowMonitor = new SmartLock\AlarmMonitor($client, $tmp.'/monitor-low.json');
 $responses = [['success' => true, 'result' => [['code' => 'alarm_lock', 'value' => 'wrong_finger'], ['code' => 'battery_state', 'value' => 'low']]]];
 $first = $lowMonitor->check('dev1', 1_000_000);
-$responses = [['success' => true, 'result' => ['logs' => []]]];
+$responses = [['success' => true, 'result' => ['properties' => [['code' => 'battery_state', 'value' => 'low', 'time' => 999_000]]]]];
+$lowMonitor->check('dev1', 1_000_500);
+$responses = [['success' => true, 'result' => ['properties' => [['code' => 'battery_state', 'value' => 'low', 'time' => 999_000]]]]];
 check('monitor: първо пускане казва за вече ниска батерия, веднъж', array_column($first, 'text') === ['Ниска батерия (low). Сменете батериите.']
     && $lowMonitor->check('dev1', 1_001_000) === []);
 
-$responses = [['success' => true, 'result' => ['logs' => [
-    ['code' => 'alarm_lock', 'value' => 'pry', 'event_time' => 1_000_500],
-    ['code' => 'unlock_request', 'value' => '30', 'event_time' => 1_000_400],
-    ['code' => 'unlock_request', 'value' => '0', 'event_time' => 1_000_450],
-    ['code' => 'hijack', 'value' => 'true', 'event_time' => 1_000_600],
-    ['code' => 'battery_state', 'value' => 'low', 'event_time' => 1_000_700],
-]]]];
-$calls = [];
-$events = $monitor->check('dev1', 1_001_000);
-check('monitor: logs заявка', str_contains($calls[0]['url'], '/v1.0/devices/dev1/logs?codes=') && str_contains($calls[0]['url'], 'start_time=1000001') && str_contains($calls[0]['url'], 'type=7'));
-check('monitor: събития по ред и сериозност', array_column($events, 'severity') === ['info', 'critical', 'critical', 'warning']
-    && str_contains($events[1]['text'], 'разбиване') && str_contains($events[2]['text'], 'заплаха'));
+$monitor = new SmartLock\AlarmMonitor($client, $tmp.'/monitor-shadow.json');
+$responses = [['success' => true, 'result' => [['code' => 'battery_state', 'value' => 'high']]]];
+$monitor->check('dev1', 1_000_000);
 
-$responses = [['success' => true, 'result' => ['logs' => [['code' => 'battery_state', 'value' => 'low', 'event_time' => 1_001_500]]]]];
-$calls = [];
-check('monitor: ниска батерия не се повтаря', $monitor->check('dev1', 1_002_000) === [] && str_contains($calls[0]['url'], 'start_time=1001001'));
+$shadow = static fn (array $props): array => ['success' => true, 'result' => ['properties' => array_map(
+    static fn (array $p): array => ['code' => $p[0], 'value' => $p[1], 'time' => $p[2]],
+    $props,
+)]];
 
+$responses = [$shadow([['alarm_lock', 'wrong_finger', 900_000], ['battery_state', 'high', 900_000]])];
+$calls = [];
+check('monitor shadow: първото виждане само запомня времената', $monitor->check('dev1', 1_001_000) === []
+    && str_contains($calls[0]['url'], '/v2.0/cloud/thing/dev1/shadow/properties?codes='));
+
+$responses = [$shadow([['alarm_lock', 'wrong_finger', 1_001_500], ['hijack', true, 1_001_600], ['unlock_request', 30, 1_001_400], ['battery_state', 'low', 1_001_700]])];
+$events = $monitor->check('dev1', 1_002_000);
+check('monitor shadow: същата стойност с ново време = нова аларма', array_column($events, 'severity') === ['info', 'warning', 'critical', 'warning']
+    && $events[1]['text'] === 'Аларма: Грешен пръстов отпечатък' && str_contains($events[2]['text'], 'заплаха'));
+
+$responses = [$shadow([['alarm_lock', 'wrong_finger', 1_001_500], ['hijack', true, 1_001_600], ['battery_state', 'low', 1_001_700]])];
+check('monitor shadow: без нови отчети няма имейл', $monitor->check('dev1', 1_003_000) === []);
+
+$logMonitor = new SmartLock\AlarmMonitor($client, $tmp.'/monitor-logs.json');
+$responses = [['success' => true, 'result' => [['code' => 'battery_state', 'value' => 'high']]]];
+$logMonitor->check('dev1', 1_000_000);
 $responses = [
     ['success' => false, 'code' => 1106, 'msg' => 'permission deny'],
-    ['success' => true, 'result' => [['code' => 'alarm_lock', 'value' => 'wrong_password'], ['code' => 'battery_state', 'value' => 'high']]],
+    ['success' => true, 'result' => ['logs' => [
+        ['code' => 'alarm_lock', 'value' => 'pry', 'event_time' => 1_000_500],
+        ['code' => 'unlock_request', 'value' => '30', 'event_time' => 1_000_400],
+        ['code' => 'unlock_request', 'value' => '0', 'event_time' => 1_000_450],
+        ['code' => 'hijack', 'value' => 'true', 'event_time' => 1_000_600],
+    ]]],
 ];
 $calls = [];
-$events = $monitor->check('dev1', 1_003_000);
-check('monitor: fallback към статус при грешка в лога', array_column($events, 'text') === ['Аларма: Грешен код', 'Батерията е наред.']);
+$events = $logMonitor->check('dev1', 1_001_000);
+check('monitor: fallback към report-logs', str_contains($calls[1]['url'], '/v2.0/cloud/thing/dev1/report-logs?codes=') && str_contains($calls[1]['url'], 'start_time=1000001')
+    && array_column($events, 'severity') === ['info', 'critical', 'critical'] && $logMonitor->lastRun['source'] === 'report-logs');
+
+$responses = [
+    ['success' => false, 'code' => 1106, 'msg' => 'x'],
+    ['success' => false, 'code' => 40000303, 'msg' => 'Parameter error!'],
+    ['success' => true, 'result' => ['logs' => [['code' => 'alarm_lock', 'value' => 'wrong_card', 'event_time' => 1_001_500]]]],
+];
+$calls = [];
+$events = $logMonitor->check('dev1', 1_002_000);
+check('monitor: fallback към v1 logs', str_contains($calls[2]['url'], '/v1.0/devices/dev1/logs?codes=') && array_column($events, 'text') === ['Аларма: Грешна карта']);
+
+$responses = [
+    ['success' => false, 'code' => 1106, 'msg' => 'x'],
+    ['success' => false, 'code' => 1106, 'msg' => 'x'],
+    ['success' => false, 'code' => 40000303, 'msg' => 'Parameter error!'],
+    ['success' => true, 'result' => [['code' => 'alarm_lock', 'value' => 'wrong_password'], ['code' => 'battery_state', 'value' => 'low']]],
+];
+$events = $logMonitor->check('dev1', 1_003_000);
+check('monitor: fallback към статус', array_column($events, 'text') === ['Аларма: Грешен код', 'Ниска батерия (low). Сменете батериите.']
+    && $logMonitor->lastRun['source'] === 'status' && str_contains((string) $logMonitor->lastRun['error'], 'Parameter error'));
 
 $message = SmartLock\Mailer::buildMessage('a@x.bg', ['b@x.bg', 'c@x.bg'], 'Тема 🚨', "Ред 1\n.\nРед 3");
 [$head, $encodedBody] = explode("\r\n\r\n", $message, 2);

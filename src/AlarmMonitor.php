@@ -47,10 +47,23 @@ final class AlarmMonitor
         $device = is_array($state[$deviceId] ?? null) ? $state[$deviceId] : null;
 
         if ($device === null) {
-            $state[$deviceId] = ['last_time' => $nowMs, 'status' => $this->currentStatus($deviceId), 'battery_low' => false];
+            // първото пускане не праща стари аларми, но казва за батерия, която вече е ниска
+            $status = $this->currentStatus($deviceId);
+            $batteryLow = false;
+            $events = [];
+            foreach (['battery_state', 'residual_electricity'] as $code) {
+                if (array_key_exists($code, $status)) {
+                    $event = $this->describe($code, $status[$code], $batteryLow);
+                    if ($event !== null && $batteryLow) {
+                        $events[] = ['time' => $nowMs] + $event;
+                    }
+                }
+            }
+
+            $state[$deviceId] = ['last_time' => $nowMs, 'status' => $status, 'battery_low' => $batteryLow];
             $this->writeState($state);
 
-            return [];
+            return $events;
         }
 
         try {

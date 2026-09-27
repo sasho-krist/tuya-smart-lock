@@ -222,7 +222,14 @@ echo "Аларми\n";
 $monitor = new SmartLock\AlarmMonitor($client, $tmp.'/monitor.json');
 $responses = [['success' => true, 'result' => [['code' => 'alarm_lock', 'value' => 'wrong_finger'], ['code' => 'battery_state', 'value' => 'high']]]];
 $calls = [];
-check('monitor: първо пускане не праща нищо', $monitor->check('dev1', 1_000_000) === [] && count($calls) === 1);
+check('monitor: първо пускане не праща стари аларми', $monitor->check('dev1', 1_000_000) === [] && count($calls) === 1);
+
+$lowMonitor = new SmartLock\AlarmMonitor($client, $tmp.'/monitor-low.json');
+$responses = [['success' => true, 'result' => [['code' => 'alarm_lock', 'value' => 'wrong_finger'], ['code' => 'battery_state', 'value' => 'low']]]];
+$first = $lowMonitor->check('dev1', 1_000_000);
+$responses = [['success' => true, 'result' => ['logs' => []]]];
+check('monitor: първо пускане казва за вече ниска батерия, веднъж', array_column($first, 'text') === ['Ниска батерия (low). Сменете батериите.']
+    && $lowMonitor->check('dev1', 1_001_000) === []);
 
 $responses = [['success' => true, 'result' => ['logs' => [
     ['code' => 'alarm_lock', 'value' => 'pry', 'event_time' => 1_000_500],

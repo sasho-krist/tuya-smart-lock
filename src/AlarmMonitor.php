@@ -32,8 +32,10 @@ final class AlarmMonitor
         'doorbell' => 'Звънене',
     ];
 
-    /** @var array{source: string, error: string|null, reports: list<array{time: int, code: string, value: mixed}>} */
+    /** @var array{source: string, error: string|null, reports: list<array{time: int, code: string, value: mixed}>, raw?: mixed} */
     public array $lastRun = ['source' => '', 'error' => null, 'reports' => []];
+
+    private mixed $lastRaw = null;
 
     public function __construct(
         private readonly TuyaClient $client,
@@ -112,7 +114,7 @@ final class AlarmMonitor
             $source = 'status';
         }
 
-        $this->lastRun = ['source' => $source, 'error' => $errors === [] ? null : implode(' | ', $errors), 'reports' => $reports];
+        $this->lastRun = ['source' => $source, 'error' => $errors === [] ? null : implode(' | ', $errors), 'reports' => $reports, 'raw' => $this->lastRaw];
         $lastTime = $reports === [] ? $nowMs : max($nowMs, max(array_column($reports, 'time')));
 
         $events = [];
@@ -182,6 +184,7 @@ final class AlarmMonitor
             'codes' => implode(',', self::CODES),
         ]);
 
+        $this->lastRaw = $result;
         $properties = is_array($result) && is_array($result['properties'] ?? null) ? $result['properties'] : null;
         if ($properties === null) {
             throw new TuyaException('shadow: неочакван отговор');

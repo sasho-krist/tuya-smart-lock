@@ -38,6 +38,12 @@ foreach (lock_devices() as $deviceId => $label) {
                 echo '  '.date('H:i:s', intdiv($r['time'], 1000))." {$r['code']} = ".json_encode($r['value'])."\n";
             }
             echo 'събития за имейл: '.count($events)."\n";
+            foreach (is_array($monitor->lastRun['raw'] ?? null) ? ($monitor->lastRun['raw']['properties'] ?? []) : [] as $p) {
+                if (is_array($p) && isset($p['code'])) {
+                    echo '  [последен отчет] '.(is_numeric($p['time'] ?? null) ? date('d.m H:i:s', intdiv((int) $p['time'], 1000)) : '?')
+                        ." {$p['code']} = ".json_encode($p['value'] ?? null)."\n";
+                }
+            }
         }
     } catch (Throwable $e) {
         fwrite(STDERR, date('c')." {$label}: ".$e->getMessage()."\n");

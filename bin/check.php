@@ -61,6 +61,15 @@ foreach ($devices as $id => $label) {
         return is_array($result) && is_array($result['logs'] ?? null) ? ($result['logs'][0] ?? null) : $result;
     });
     $step('История (7 дни)', static fn () => (new SmartLockService($client))->logs($id, 7, 5));
+    foreach (['/v1.0/devices/{id}/door-lock/alarm-logs', '/v1.1/devices/{id}/door-lock/alarm-logs'] as $pathTemplate) {
+        $step('Аларми: '.$pathTemplate, static function () use ($client, $id, $pathTemplate): mixed {
+            $end = (int) round(microtime(true) * 1000);
+
+            return $client->request('GET', str_replace('{id}', rawurlencode($id), $pathTemplate), [
+                'page_no' => 1, 'page_size' => 5, 'start_time' => $end - 86_400_000, 'end_time' => $end,
+            ]);
+        });
+    }
     $step('Постоянни кодове', static fn () => (new SmartLockService($client))->passwords($id));
     $step('Ticket за отключване (не отключва)', static function () use ($client, $id): string {
         $ticket = $client->request('POST', '/v1.0/devices/'.rawurlencode($id).'/door-lock/password-ticket');

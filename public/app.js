@@ -276,7 +276,14 @@
         }
     }
 
+    // window.AndroidBridge идва от Android приложението (tuya-smart-lock-mobile)
+    const bridge = window.AndroidBridge;
+
     async function copyPassword(card) {
+        if (bridge) {
+            bridge.copy(shareText(card));
+            return;
+        }
         try {
             await navigator.clipboard.writeText(shareText(card));
             setMessage(card, 'Копирано.', 'success');
@@ -286,6 +293,10 @@
     }
 
     async function sharePassword(card) {
+        if (bridge) {
+            bridge.share(shareText(card));
+            return;
+        }
         if (!navigator.share) {
             copyPassword(card);
             return;

@@ -47,7 +47,7 @@ if (! isset($devices[$deviceId])) {
     respond(404, ['ok' => false, 'error' => 'Непозната брава.']);
 }
 
-$isWrite = in_array($action, ['unlock', 'lock', 'temp-password', 'password-create', 'password-delete', 'name-set', 'setting-set'], true);
+$isWrite = in_array($action, ['unlock', 'lock', 'temp-password', 'password-create', 'password-delete', 'name-set', 'reply-request'], true);
 if ($isWrite) {
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
         respond(405, ['ok' => false, 'error' => 'Използвайте POST.']);
@@ -88,18 +88,11 @@ try {
         case 'logs':
             respond(200, ['ok' => true, 'logs' => $service->logs($deviceId), 'names' => $names->all($deviceId)]);
 
-        case 'settings':
-            respond(200, ['ok' => true] + $service->settings($deviceId));
-
-        case 'setting-set':
-            $input = json_input();
-            $code = (string) ($input['code'] ?? '');
-            if (preg_match('/^[a-z0-9_]{1,64}$/', $code) !== 1) {
-                respond(422, ['ok' => false, 'error' => 'Невалидна настройка.']);
-            }
-            $service->changeSetting($deviceId, $code, $input['value'] ?? null);
-            audit_log($action, $deviceId, "ok: {$code} = ".json_encode($input['value'] ?? null, JSON_UNESCAPED_UNICODE));
-            respond(200, ['ok' => true, 'message' => 'Настройката е изпратена. Бравата я прилага при следващото събуждане.']);
+        case 'reply-request':
+            $approve = (json_input()['approve'] ?? false) === true;
+            $service->replyUnlockRequest($deviceId, $approve);
+            audit_log($action, $deviceId, $approve ? 'ok: одобрено' : 'ok: отказано');
+            respond(200, ['ok' => true, 'message' => $approve ? 'Отключването е одобрено.' : 'Заявката е отказана.']);
 
         case 'passwords':
             respond(200, ['ok' => true, 'passwords' => $service->passwords($deviceId)]);

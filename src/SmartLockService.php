@@ -9,7 +9,7 @@ final class SmartLockService
     public function __construct(private readonly TuyaClient $client) {}
 
     /**
-     * @return array{id: string, name: string, online: bool, battery: int|string|null, status: array<string, mixed>}
+     * @return array{id: string, name: string, online: bool, battery: int|string|null, unlock_request: int, status: array<string, mixed>}
      */
     public function status(string $deviceId): array
     {
@@ -30,6 +30,7 @@ final class SmartLockService
             'name' => is_array($info) && is_string($info['name'] ?? null) ? $info['name'] : $deviceId,
             'online' => is_array($info) && ($info['online'] ?? false) === true,
             'battery' => is_int($battery) || is_string($battery) ? $battery : null,
+            'unlock_request' => is_numeric($status['unlock_request'] ?? null) ? max(0, (int) $status['unlock_request']) : 0,
             'status' => $status,
         ];
     }
@@ -204,199 +205,19 @@ final class SmartLockService
     }
 
     /**
-     * Всички настройки, които бравата позволява да се променят (език, звук, автоматично заключване…),
-     * с текущите им стойности. Първо пробва стандартните инструкции, после thing model (DP инструкции).
-     *
-     * @return array{source: string, settings: list<array{code: string, type: string, range: list<string>, min: int|null, max: int|null, step: int|null, unit: string, value: mixed}>}
+     * Отговор на заявка за отключване от вратата (някой е позвънил/натиснал бутона на бравата).
+     * Изпраща се само докато бравата чака (unlock_request > 0), иначе командата няма смисъл.
      */
-    public function settings(string $deviceId): array
+    public function replyUnlockRequest(string $deviceId, bool $approve): void
     {
-        [$source, $specs] = $this->specification($deviceId);
-        $current = $source === 'v2' ? $this->shadowProperties($deviceId) : $this->status($deviceId)['status'];
-
-        $settings = [];
-        foreach ($specs as $spec) {
-            $settings[] = $spec + ['value' => $current[$spec['code']] ?? null];
+        $pending = $this->status($deviceId)['status']['unlock_request'] ?? 0;
+        if (! is_numeric($pending) || (int) $pending <= 0) {
+            throw new TuyaException('Няма чакаща заявка от вратата (или е изтекла).');
         }
 
-        return ['source' => $source, 'settings' => $settings];
-    }
-
-    public function changeSetting(string $deviceId, string $code, mixed $value): void
-    {
-        [$source, $specs] = $this->specification($deviceId);
-
-        $spec = null;
-        foreach ($specs as $candidate) {
-            if ($candidate['code'] === $code) {
-                $spec = $candidate;
-            }
-        }
-        if ($spec === null) {
-            throw new TuyaException("Настройката {$code} не се поддържа от бравата.");
-        }
-
-        $value = self::normalizeSettingValue($spec, $value);
-        $id = rawurlencode($deviceId);
-
-        if ($source === 'v2') {
-            $this->client->request('POST', "/v2.0/cloud/thing/{$id}/shadow/properties/issue", [], [
-                'properties' => (string) json_encode([$code => $value]),
-            ]);
-
-            return;
-        }
-
-        $this->client->request('POST', "/v1.0/devices/{$id}/commands", [], [
-            'commands' => [['code' => $code, 'value' => $value]],
+        $this->client->request('POST', '/v1.0/devices/'.rawurlencode($deviceId).'/commands', [], [
+            'commands' => [['code' => 'reply_unlock_request', 'value' => $approve]],
         ]);
-    }
-
-    /**
-     * @param  array{code: string, type: string, range: list<string>, min: int|null, max: int|null, step: int|null, unit: string}  $spec
-     */
-    public static function normalizeSettingValue(array $spec, mixed $value): bool|int|string
-    {
-        switch ($spec['type']) {
-            case 'bool':
-                return filter_var($value, FILTER_VALIDATE_BOOLEAN);
-
-            case 'enum':
-                if (! is_string($value) || ! in_array($value, $spec['range'], true)) {
-                    throw new TuyaException("Невалидна стойност за {$spec['code']}.");
-                }
-
-                return $value;
-
-            default:
-                if (! is_numeric($value)) {
-                    throw new TuyaException("Невалидна стойност за {$spec['code']}.");
-                }
-                $int = (int) $value;
-                if (($spec['min'] !== null && $int < $spec['min']) || ($spec['max'] !== null && $int > $spec['max'])) {
-                    throw new TuyaException("Стойността за {$spec['code']} е извън допустимото ({$spec['min']}–{$spec['max']}).");
-                }
-
-                return $int;
-        }
-    }
-
-    /**
-     * @return array{0: string, 1: list<array{code: string, type: string, range: list<string>, min: int|null, max: int|null, step: int|null, unit: string}>}
-     */
-    private function specification(string $deviceId): array
-    {
-        $id = rawurlencode($deviceId);
-        $errors = [];
-
-        foreach (["/v1.0/devices/{$id}/specifications", "/v1.0/iot-03/devices/{$id}/specification"] as $path) {
-            try {
-                $result = $this->client->request('GET', $path);
-                $specs = [];
-                foreach (is_array($result) && is_array($result['functions'] ?? null) ? $result['functions'] : [] as $fn) {
-                    if (! is_array($fn) || ! is_string($fn['code'] ?? null)) {
-                        continue;
-                    }
-                    $values = is_string($fn['values'] ?? null) ? json_decode($fn['values'], true) : ($fn['values'] ?? []);
-                    $spec = self::buildSpec($fn['code'], strtolower((string) ($fn['type'] ?? '')), is_array($values) ? $values : []);
-                    if ($spec !== null) {
-                        $specs[] = $spec;
-                    }
-                }
-                if ($specs !== []) {
-                    return ['v1', $specs];
-                }
-            } catch (TuyaException $e) {
-                $errors[] = $e->getMessage();
-            }
-        }
-
-        try {
-            $result = $this->client->request('GET', "/v2.0/cloud/thing/{$id}/model");
-            $model = is_array($result) && is_string($result['model'] ?? null) ? json_decode($result['model'], true) : null;
-
-            $specs = [];
-            foreach (is_array($model) && is_array($model['services'] ?? null) ? $model['services'] : [] as $service) {
-                foreach (is_array($service['properties'] ?? null) ? $service['properties'] : [] as $prop) {
-                    if (! is_array($prop) || ! is_string($prop['code'] ?? null) || ! in_array($prop['accessMode'] ?? '', ['rw', 'wr'], true)) {
-                        continue;
-                    }
-                    $typeSpec = is_array($prop['typeSpec'] ?? null) ? $prop['typeSpec'] : [];
-                    $spec = self::buildSpec($prop['code'], strtolower((string) ($typeSpec['type'] ?? '')), $typeSpec);
-                    if ($spec !== null) {
-                        $specs[] = $spec;
-                    }
-                }
-            }
-            if ($specs !== []) {
-                return ['v2', $specs];
-            }
-        } catch (TuyaException $e) {
-            $errors[] = $e->getMessage();
-        }
-
-        throw new TuyaException(
-            'Бравата не предоставя настройки в текущия режим. В Tuya платформата превключете продукта на „DP Instruction“ (вижте README).'
-            .($errors !== [] ? ' ['.implode(' | ', $errors).']' : ''),
-        );
-    }
-
-    /**
-     * @param  array<mixed>  $values
-     * @return array{code: string, type: string, range: list<string>, min: int|null, max: int|null, step: int|null, unit: string}|null
-     */
-    private static function buildSpec(string $code, string $type, array $values): ?array
-    {
-        if (preg_match('/^(unlock_|reply_|remote_|alarm_|hijack|residual|battery|record|doorbell$|open_inside|closed_opened|lock_motor)/', $code) === 1) {
-            return null;
-        }
-
-        $type = match ($type) {
-            'boolean', 'bool' => 'bool',
-            'enum' => 'enum',
-            'integer', 'value' => 'int',
-            default => null,
-        };
-        if ($type === null) {
-            return null;
-        }
-
-        $range = [];
-        foreach (is_array($values['range'] ?? null) ? $values['range'] : [] as $item) {
-            if (is_scalar($item)) {
-                $range[] = (string) $item;
-            }
-        }
-        if ($type === 'enum' && $range === []) {
-            return null;
-        }
-
-        return [
-            'code' => $code,
-            'type' => $type,
-            'range' => $range,
-            'min' => is_numeric($values['min'] ?? null) ? (int) $values['min'] : null,
-            'max' => is_numeric($values['max'] ?? null) ? (int) $values['max'] : null,
-            'step' => is_numeric($values['step'] ?? null) ? (int) $values['step'] : null,
-            'unit' => is_string($values['unit'] ?? null) ? $values['unit'] : '',
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function shadowProperties(string $deviceId): array
-    {
-        $result = $this->client->request('GET', '/v2.0/cloud/thing/'.rawurlencode($deviceId).'/shadow/properties');
-
-        $values = [];
-        foreach (is_array($result) && is_array($result['properties'] ?? null) ? $result['properties'] : [] as $prop) {
-            if (is_array($prop) && is_string($prop['code'] ?? null)) {
-                $values[$prop['code']] = $prop['value'] ?? null;
-            }
-        }
-
-        return $values;
     }
 
     private function ticket(string $deviceId): string

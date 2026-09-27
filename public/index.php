@@ -59,12 +59,18 @@ $e = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
                 <span class="badge lock-online"></span>
             </header>
             <p class="muted">Батерия: <strong class="lock-battery">—</strong></p>
+            <div class="door-request" role="alert" hidden>
+                <p><strong>🔔 Някой чака на вратата</strong> <span class="door-request-time"></span></p>
+                <div class="actions">
+                    <button type="button" class="btn primary" data-action="approve">Одобри отключване</button>
+                    <button type="button" class="btn" data-action="deny">Откажи</button>
+                </div>
+            </div>
             <div class="actions">
                 <button type="button" class="btn primary remote-only" data-action="unlock">Отключи</button>
                 <button type="button" class="btn remote-only" data-action="lock">Заключи</button>
                 <button type="button" class="btn primary" data-action="temp-password">Временна парола</button>
                 <button type="button" class="btn" data-action="users">Потребители</button>
-                <button type="button" class="btn" data-action="settings">Настройки</button>
                 <button type="button" class="btn ghost" data-action="refresh">Обнови</button>
                 <button type="button" class="btn ghost" data-action="logs">История</button>
             </div>
@@ -96,11 +102,6 @@ $e = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
                     <button type="submit" class="btn primary">Добави</button>
                 </form>
                 <ul class="users-list"></ul>
-            </section>
-            <section class="settings" hidden>
-                <h3>Настройки на бравата</h3>
-                <p class="muted small">Промените се прилагат, когато бравата се събуди (докоснете клавиатурата).</p>
-                <div class="settings-list"></div>
             </section>
             <div class="temp-result" hidden>
                 <p class="muted">Парола:</p>

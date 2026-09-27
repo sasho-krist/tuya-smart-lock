@@ -194,82 +194,29 @@ $responses = [['success' => true, 'result' => ['logs' => [['update_time' => 1, '
 $calls = [];
 check('logs: status като обект', $service->logs('dev1')[0]['events'] === ['unlock_card' => 3]);
 
-echo "Настройки\n";
-$responses = [
-    ['success' => true, 'result' => ['functions' => [
-        ['code' => 'beep_volume', 'type' => 'Enum', 'values' => '{"range":["mute","normal"]}'],
-        ['code' => 'automatic_lock', 'type' => 'Boolean', 'values' => '{}'],
-        ['code' => 'unlock_fingerprint', 'type' => 'Integer', 'values' => '{"min":0,"max":999}'],
-        ['code' => 'reply_unlock_request', 'type' => 'Boolean', 'values' => '{}'],
-    ]]],
+echo "Заявка от вратата\n";
+$statusWith = static fn (int $pending): array => [
     ['success' => true, 'result' => ['name' => 'L', 'online' => true]],
-    ['success' => true, 'result' => [['code' => 'beep_volume', 'value' => 'normal']]],
+    ['success' => true, 'result' => [['code' => 'unlock_request', 'value' => $pending]]],
 ];
+$responses = [...$statusWith(25), ['success' => true, 'result' => true]];
 $calls = [];
-$settings = $service->settings('dev1');
-check('settings v1: пропуска unlock_* и reply_*, добавя текуща стойност', $settings['source'] === 'v1'
-    && array_column($settings['settings'], 'code') === ['beep_volume', 'automatic_lock']
-    && $settings['settings'][0]['value'] === 'normal' && $settings['settings'][0]['range'] === ['mute', 'normal']);
+$service->replyUnlockRequest('dev1', true);
+check('reply: изпраща reply_unlock_request при чакаща заявка', str_ends_with($calls[2]['url'], '/v1.0/devices/dev1/commands')
+    && json_decode($calls[2]['body'], true) === ['commands' => [['code' => 'reply_unlock_request', 'value' => true]]]);
 
-$responses = [
-    ['success' => true, 'result' => ['functions' => [['code' => 'beep_volume', 'type' => 'Enum', 'values' => '{"range":["mute","normal"]}']]]],
-    ['success' => true, 'result' => true],
-];
-$calls = [];
-$service->changeSetting('dev1', 'beep_volume', 'mute');
-check('settings v1: commands body', str_ends_with($calls[1]['url'], '/v1.0/devices/dev1/commands')
-    && json_decode($calls[1]['body'], true) === ['commands' => [['code' => 'beep_volume', 'value' => 'mute']]]);
-
-$responses = [['success' => true, 'result' => ['functions' => [['code' => 'beep_volume', 'type' => 'Enum', 'values' => '{"range":["mute","normal"]}']]]]];
+$responses = $statusWith(0);
 $calls = [];
 $thrown = null;
 try {
-    $service->changeSetting('dev1', 'beep_volume', 'loud');
+    $service->replyUnlockRequest('dev1', true);
 } catch (TuyaException $e) {
     $thrown = $e;
 }
-check('settings: невалидна стойност не се изпраща', $thrown !== null && count($calls) === 1);
+check('reply: без чакаща заявка не изпраща команда', $thrown !== null && count($calls) === 2);
 
-$model = json_encode(['services' => [['properties' => [
-    ['code' => 'language', 'accessMode' => 'rw', 'typeSpec' => ['type' => 'enum', 'range' => ['english', 'russian']]],
-    ['code' => 'auto_lock_time', 'accessMode' => 'rw', 'typeSpec' => ['type' => 'value', 'min' => 1, 'max' => 60, 'step' => 1, 'unit' => 's']],
-    ['code' => 'residual_electricity', 'accessMode' => 'ro', 'typeSpec' => ['type' => 'value']],
-]]]]);
-$responses = [
-    ['success' => false, 'code' => 2009, 'msg' => 'not support this device'],
-    ['success' => false, 'code' => 1108, 'msg' => 'uri path invalid'],
-    ['success' => true, 'result' => ['model' => $model]],
-    ['success' => true, 'result' => ['properties' => [['code' => 'language', 'value' => 'english']]]],
-];
-$calls = [];
-$settings = $service->settings('dev1');
-check('settings v2: fallback към thing model', $settings['source'] === 'v2'
-    && array_column($settings['settings'], 'code') === ['language', 'auto_lock_time']
-    && $settings['settings'][0]['value'] === 'english' && $settings['settings'][1]['max'] === 60);
-
-$responses = [
-    ['success' => false, 'code' => 2009, 'msg' => 'x'],
-    ['success' => false, 'code' => 2009, 'msg' => 'x'],
-    ['success' => true, 'result' => ['model' => $model]],
-    ['success' => true, 'result' => true],
-];
-$calls = [];
-$service->changeSetting('dev1', 'language', 'russian');
-check('settings v2: shadow issue body', str_ends_with($calls[3]['url'], '/shadow/properties/issue')
-    && json_decode($calls[3]['body'], true) === ['properties' => '{"language":"russian"}']);
-
-$responses = [
-    ['success' => false, 'code' => 2009, 'msg' => 'x'],
-    ['success' => false, 'code' => 2009, 'msg' => 'x'],
-    ['success' => false, 'code' => 1106, 'msg' => 'permission deny'],
-];
-$thrown = null;
-try {
-    $service->settings('dev1');
-} catch (TuyaException $e) {
-    $thrown = $e;
-}
-check('settings: ясна грешка, ако няма режим', $thrown !== null && str_contains($thrown->getMessage(), 'DP Instruction'));
+$responses = $statusWith(18);
+check('status: unlock_request', $service->status('dev1')['unlock_request'] === 18);
 
 echo "Имена\n";
 $store = new SmartLock\NameStore($tmp.'/names.json');

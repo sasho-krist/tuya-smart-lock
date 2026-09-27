@@ -61,14 +61,6 @@ foreach ($devices as $id => $label) {
         return is_array($result) && is_array($result['logs'] ?? null) ? ($result['logs'][0] ?? null) : $result;
     });
     $step('История (7 дни)', static fn () => (new SmartLockService($client))->logs($id, 7, 5));
-    $step('Настройки', static function () use ($client, $id): mixed {
-        $settings = (new SmartLockService($client))->settings($id);
-
-        return ['source' => $settings['source'], 'settings' => array_map(
-            static fn (array $s): string => $s['code'].' = '.json_encode($s['value']).' ('.$s['type'].($s['range'] !== [] ? ': '.implode('|', $s['range']) : '').')',
-            $settings['settings'],
-        )];
-    });
     $step('Постоянни кодове', static fn () => (new SmartLockService($client))->passwords($id));
     $step('Ticket за отключване (не отключва)', static function () use ($client, $id): string {
         $ticket = $client->request('POST', '/v1.0/devices/'.rawurlencode($id).'/door-lock/password-ticket');

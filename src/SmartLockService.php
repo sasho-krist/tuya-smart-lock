@@ -347,7 +347,7 @@ final class SmartLockService
      */
     private static function buildSpec(string $code, string $type, array $values): ?array
     {
-        if (preg_match('/^(unlock_|remote_|alarm_|hijack|residual|battery|record|doorbell$|open_inside|closed_opened|lock_motor)/', $code) === 1) {
+        if (preg_match('/^(unlock_|reply_|remote_|alarm_|hijack|residual|battery|record|doorbell$|open_inside|closed_opened|lock_motor)/', $code) === 1) {
             return null;
         }
 

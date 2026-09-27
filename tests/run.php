@@ -200,13 +200,14 @@ $responses = [
         ['code' => 'beep_volume', 'type' => 'Enum', 'values' => '{"range":["mute","normal"]}'],
         ['code' => 'automatic_lock', 'type' => 'Boolean', 'values' => '{}'],
         ['code' => 'unlock_fingerprint', 'type' => 'Integer', 'values' => '{"min":0,"max":999}'],
+        ['code' => 'reply_unlock_request', 'type' => 'Boolean', 'values' => '{}'],
     ]]],
     ['success' => true, 'result' => ['name' => 'L', 'online' => true]],
     ['success' => true, 'result' => [['code' => 'beep_volume', 'value' => 'normal']]],
 ];
 $calls = [];
 $settings = $service->settings('dev1');
-check('settings v1: пропуска unlock_*, добавя текуща стойност', $settings['source'] === 'v1'
+check('settings v1: пропуска unlock_* и reply_*, добавя текуща стойност', $settings['source'] === 'v1'
     && array_column($settings['settings'], 'code') === ['beep_volume', 'automatic_lock']
     && $settings['settings'][0]['value'] === 'normal' && $settings['settings'][0]['range'] === ['mute', 'normal']);
 

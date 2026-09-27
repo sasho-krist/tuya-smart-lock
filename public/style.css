@@ -97,8 +97,22 @@ h2 { font-size: 1.15rem; margin: 0; }
 .temp-password { font-size: 2rem; font-weight: 700; letter-spacing: .15em; font-variant-numeric: tabular-nums; }
 [hidden] { display: none !important; }
 
-.users { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
-.users h3 { font-size: 1rem; margin: 0 0 8px; }
+.users, .settings { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.users h3, .settings h3 { font-size: 1rem; margin: 0 0 8px; }
 .users-list { margin: 12px 0 0; padding-left: 18px; }
 .btn-link { margin-left: 8px; background: none; border: 0; padding: 0; color: var(--primary); cursor: pointer; font-size: .85rem; text-decoration: underline; }
 .btn-link.danger { color: var(--off); }
+
+.small { font-size: .85rem; margin: 0 0 8px; }
+.settings-list { display: grid; gap: 10px; }
+.setting { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.setting select, .setting input[type=number] {
+    padding: 6px 8px;
+    font-size: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    max-width: 55%;
+}
+.setting-bool input { width: 20px; height: 20px; }

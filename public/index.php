@@ -64,6 +64,7 @@ $e = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
                 <button type="button" class="btn remote-only" data-action="lock">Заключи</button>
                 <button type="button" class="btn primary" data-action="temp-password">Временна парола</button>
                 <button type="button" class="btn" data-action="users">Потребители</button>
+                <button type="button" class="btn" data-action="settings">Настройки</button>
                 <button type="button" class="btn ghost" data-action="refresh">Обнови</button>
                 <button type="button" class="btn ghost" data-action="logs">История</button>
             </div>
@@ -95,6 +96,11 @@ $e = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
                     <button type="submit" class="btn primary">Добави</button>
                 </form>
                 <ul class="users-list"></ul>
+            </section>
+            <section class="settings" hidden>
+                <h3>Настройки на бравата</h3>
+                <p class="muted small">Промените се прилагат, когато бравата се събуди (докоснете клавиатурата).</p>
+                <div class="settings-list"></div>
             </section>
             <div class="temp-result" hidden>
                 <p class="muted">Парола:</p>

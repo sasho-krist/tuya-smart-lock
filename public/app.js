@@ -128,6 +128,108 @@
         }
     }
 
+    const SETTING_LABELS = {
+        language: 'Език',
+        beep_volume: 'Сила на звука',
+        alarm_volume: 'Сила на алармата',
+        doorbell_volume: 'Сила на звънеца',
+        doorbell_song: 'Мелодия на звънеца',
+        key_tone: 'Звук на клавиатурата',
+        automatic_lock: 'Автоматично заключване',
+        auto_lock_time: 'Време до автоматично заключване',
+        auto_lock_timer: 'Време до автоматично заключване',
+        do_not_disturb: 'Не безпокойте',
+        normal_open_switch: 'Режим „винаги отворено“',
+        passage_mode: 'Режим „винаги отворено“',
+        double_lock: 'Двойно заключване',
+        arming_switch: 'Охрана',
+        rtc_lock: 'Заключване по график',
+        unlock_switch: 'Комбинирано отключване',
+        motor_torque: 'Сила на мотора',
+        motor_direction: 'Посока на мотора',
+        lock_screen: 'Заключване на екрана',
+        verify_lock_switch: 'Потвърждение при заключване',
+        special_function: 'Специална функция',
+        manual_lock: 'Ръчно заключване',
+    };
+
+    const VALUE_LABELS = {
+        chinese_simplified: 'китайски', english: 'английски', russian: 'руски', german: 'немски',
+        french: 'френски', spanish: 'испански', italian: 'италиански', portuguese: 'португалски',
+        bulgarian: 'български', turkish: 'турски', arabic: 'арабски', japanese: 'японски', korean: 'корейски',
+        chinese_traditional: 'китайски (традиционен)', vietnamese: 'виетнамски', thai: 'тайландски',
+        mute: 'без звук', low: 'ниска', normal: 'нормална', high: 'висока', middle: 'средна',
+    };
+
+    function settingControl(card, deviceId, setting) {
+        const label = document.createElement('label');
+        label.className = 'setting';
+        const title = document.createElement('span');
+        title.textContent = SETTING_LABELS[setting.code] || setting.code;
+        label.appendChild(title);
+
+        let input;
+        if (setting.type === 'bool') {
+            input = document.createElement('input');
+            input.type = 'checkbox';
+            input.checked = setting.value === true;
+            label.classList.add('setting-bool');
+        } else if (setting.type === 'enum') {
+            input = document.createElement('select');
+            for (const value of setting.range) {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = VALUE_LABELS[value] || value;
+                option.selected = value === setting.value;
+                input.appendChild(option);
+            }
+            if (!setting.range.includes(setting.value)) input.selectedIndex = -1;
+        } else {
+            input = document.createElement('input');
+            input.type = 'number';
+            if (setting.min !== null) input.min = setting.min;
+            if (setting.max !== null) input.max = setting.max;
+            if (setting.step) input.step = setting.step;
+            input.value = setting.value ?? '';
+            if (setting.unit) title.textContent += ` (${setting.unit})`;
+        }
+
+        input.addEventListener('change', async () => {
+            const value = setting.type === 'bool' ? input.checked : setting.type === 'int' ? Number(input.value) : input.value;
+            input.disabled = true;
+            try {
+                const { message } = await api('setting-set', deviceId, 'POST', { code: setting.code, value });
+                setMessage(card, message, 'success');
+            } catch (err) {
+                setMessage(card, err.message, 'error');
+            } finally {
+                input.disabled = false;
+            }
+        });
+
+        label.appendChild(input);
+        return label;
+    }
+
+    async function showSettings(card, deviceId) {
+        const section = card.querySelector('.settings');
+        section.hidden = false;
+        const list = section.querySelector('.settings-list');
+        list.innerHTML = '<p class="muted">Зареждане…</p>';
+
+        try {
+            const { settings } = await api('settings', deviceId);
+            list.innerHTML = '';
+            for (const setting of settings) list.appendChild(settingControl(card, deviceId, setting));
+        } catch (err) {
+            list.innerHTML = '';
+            const p = document.createElement('p');
+            p.className = 'error';
+            p.textContent = err.message;
+            list.appendChild(p);
+        }
+    }
+
     const PHASES = { 1: 'изчаква бравата', 2: 'активен', 3: 'замразен', 4: 'изтрит', 5: 'изтекъл' };
 
     async function showUsers(card, deviceId) {
@@ -296,6 +398,11 @@
             if (action === 'refresh') refresh(card, device.id);
             else if (action === 'logs') showLogs(card, device.id);
             else if (action === 'temp-password') form.hidden = !form.hidden;
+            else if (action === 'settings') {
+                const settings = card.querySelector('.settings');
+                if (settings.hidden) showSettings(card, device.id);
+                else settings.hidden = true;
+            }
             else if (action === 'users') {
                 const users = card.querySelector('.users');
                 if (users.hidden) showUsers(card, device.id);

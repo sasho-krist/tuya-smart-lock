@@ -47,6 +47,15 @@ TUYA_DEVICE_IDS=bf0123456789abcdef:Входна врата,bf9876543210fedcba:С
 APP_PASSWORD_HASH='$2y$10$...'
 ```
 
+⚠️ **Не слагай проекта в `/var/www/html`.** Иначе `.env` и `storage/` може да са достъпни от интернет.
+Сложи го извън уеб папката (напр. `/var/www/tuya-smart-lock-app`) и направи видима само `public/`:
+
+```bash
+sudo ln -s /var/www/tuya-smart-lock-app/public /var/www/html/tuya-smart-lock
+```
+
+`.htaccess` файловете в repo-то блокират останалото при Apache с `AllowOverride All`, но не разчитай само на тях.
+
 На хостинг: document root трябва да сочи към `public/`. Така `.env`, `src/` и `storage/` не са достъпни от уеба.
 `storage/` трябва да е writable за PHP. **Използвай само HTTPS.**
 
@@ -106,7 +115,7 @@ $client->request('GET', "/v1.0/devices/{$deviceId}/functions");
 
 ```bash
 sudo -u www-data php bin/test-mail.php     # тестов имейл
-echo '* * * * * www-data php /var/www/html/tuya-smart-lock-app/bin/monitor.php >> /var/www/html/tuya-smart-lock-app/storage/monitor.log 2>&1' | sudo tee /etc/cron.d/smart-lock
+echo '* * * * * www-data php /var/www/tuya-smart-lock-app/bin/monitor.php >> /var/www/tuya-smart-lock-app/storage/monitor.log 2>&1' | sudo tee /etc/cron.d/smart-lock
 ```
 
 Всяка проверка е 1 заявка към Tuya (1440 на ден). Ако лимитът на плана е малък, пусни я на 2–5 минути (`*/2 * * * *`).

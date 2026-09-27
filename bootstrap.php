@@ -52,6 +52,7 @@ function lock_service(): SmartLockService
         clientId: Env::required('TUYA_CLIENT_ID'),
         clientSecret: Env::required('TUYA_CLIENT_SECRET'),
         tokenCacheFile: STORAGE_DIR.'/tuya_token.json',
+        caFile: Env::get('TUYA_CA_FILE'),
     );
 
     return new SmartLockService($client);

@@ -26,6 +26,7 @@ final class TuyaClient
         private readonly string $tokenCacheFile,
         ?callable $transport = null,
         private readonly int $timeout = 15,
+        private readonly string $caFile = '',
     ) {
         $this->transport = $transport ?? $this->curlTransport(...);
     }
@@ -195,6 +196,9 @@ final class TuyaClient
             CURLOPT_TIMEOUT => $this->timeout,
             CURLOPT_CONNECTTIMEOUT => 5,
         ]);
+        if ($this->caFile !== '') {
+            curl_setopt($ch, CURLOPT_CAINFO, $this->caFile);
+        }
         if ($body !== '') {
             curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         }

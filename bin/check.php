@@ -17,6 +17,7 @@ $client = new TuyaClient(
     clientId: Env::required('TUYA_CLIENT_ID'),
     clientSecret: Env::required('TUYA_CLIENT_SECRET'),
     tokenCacheFile: STORAGE_DIR.'/tuya_token.json',
+    caFile: Env::get('TUYA_CA_FILE'),
 );
 
 $step = static function (string $label, callable $fn): void {

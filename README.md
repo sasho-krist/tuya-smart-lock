@@ -136,6 +136,17 @@ echo '* * * * * www-data php /var/www/tuya-smart-lock-app/bin/monitor.php >> /va
 `TUYA_REMOTE_UNLOCK=false` в `.env`. Така бутоните „Отключи“ и „Заключи“ се скриват и остават временните пароли.
 Офлайн паролите се изчисляват в cloud-а и бравата ги приема, без да е онлайн.
 
+## Локално на Windows (WAMP/XAMPP)
+
+При грешка `SSL certificate problem: self-signed certificate in certificate chain` или `unable to get local issuer certificate`:
+
+1. Изтегли https://curl.se/ca/cacert.pem, напр. в `C:\wamp64\cacert.pem`.
+2. В `.env`: `TUYA_CA_FILE=C:/wamp64/cacert.pem`. Друг вариант е `curl.cainfo` в `php.ini`, последван от рестарт на Apache.
+3. Ако грешката остане, антивирусна програма (Avast, Kaspersky, ESET…) проверява HTTPS трафика. Изключи
+   „HTTPS scanning“ за PHP/Apache или добави нейния root сертификат към `cacert.pem`.
+
+Не изключвай проверката на сертификата (`CURLOPT_SSL_VERIFYPEER`), защото през тази връзка минава отключването на вратата.
+
 ## Чести грешки
 
 | Код | Причина |

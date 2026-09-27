@@ -27,10 +27,18 @@ $client = new TuyaClient(
 $monitor = new AlarmMonitor($client, STORAGE_DIR.'/monitor_state.json');
 $notifyInfo = filter_var(Env::get('ALERT_DOORBELL', 'true'), FILTER_VALIDATE_BOOLEAN);
 $appUrl = Env::get('APP_URL');
+$debug = in_array('--debug', $argv, true);
 
 foreach (lock_devices() as $deviceId => $label) {
     try {
         $events = $monitor->check($deviceId);
+        if ($debug) {
+            echo "== {$label}\nизточник: {$monitor->lastRun['source']}".($monitor->lastRun['error'] !== null ? " (лог грешка: {$monitor->lastRun['error']})" : '')."\n";
+            foreach ($monitor->lastRun['reports'] as $r) {
+                echo '  '.date('H:i:s', intdiv($r['time'], 1000))." {$r['code']} = ".json_encode($r['value'])."\n";
+            }
+            echo 'събития за имейл: '.count($events)."\n";
+        }
     } catch (Throwable $e) {
         fwrite(STDERR, date('c')." {$label}: ".$e->getMessage()."\n");
         continue;

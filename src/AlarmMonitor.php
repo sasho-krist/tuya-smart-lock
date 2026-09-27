@@ -32,6 +32,9 @@ final class AlarmMonitor
         'doorbell' => 'Звънене',
     ];
 
+    /** @var array{source: string, error: string|null, reports: list<array{time: int, code: string, value: mixed}>} */
+    public array $lastRun = ['source' => '', 'error' => null, 'reports' => []];
+
     public function __construct(
         private readonly TuyaClient $client,
         private readonly string $stateFile,
@@ -61,6 +64,7 @@ final class AlarmMonitor
             }
 
             $state[$deviceId] = ['last_time' => $nowMs, 'status' => $status, 'battery_low' => $batteryLow];
+            $this->lastRun = ['source' => 'first-run', 'error' => null, 'reports' => []];
             $this->writeState($state);
 
             return $events;
@@ -68,8 +72,9 @@ final class AlarmMonitor
 
         try {
             $reports = $this->reportsFromLogs($deviceId, (int) ($device['last_time'] ?? $nowMs), $nowMs);
+            $this->lastRun = ['source' => 'logs', 'error' => null, 'reports' => $reports];
             $lastTime = $reports === [] ? $nowMs : max($nowMs, max(array_column($reports, 'time')));
-        } catch (TuyaException) {
+        } catch (TuyaException $e) {
             $status = $this->currentStatus($deviceId);
             $previous = is_array($device['status'] ?? null) ? $device['status'] : [];
             $reports = [];
@@ -81,6 +86,7 @@ final class AlarmMonitor
             }
             $device['status'] = $status;
             $lastTime = $nowMs;
+            $this->lastRun = ['source' => 'status', 'error' => $e->getMessage(), 'reports' => $reports];
         }
 
         $events = [];

@@ -17,6 +17,7 @@ spl_autoload_register(static function (string $class): void {
 });
 
 Env::load(__DIR__.'/.env');
+date_default_timezone_set(Env::get('APP_TIMEZONE', 'Europe/Sofia'));
 
 const STORAGE_DIR = __DIR__.'/storage';
 

@@ -218,6 +218,42 @@ check('reply: без чакаща заявка не изпраща команд�
 $responses = $statusWith(18);
 check('status: unlock_request', $service->status('dev1')['unlock_request'] === 18);
 
+echo "Аларми\n";
+$monitor = new SmartLock\AlarmMonitor($client, $tmp.'/monitor.json');
+$responses = [['success' => true, 'result' => [['code' => 'alarm_lock', 'value' => 'wrong_finger'], ['code' => 'battery_state', 'value' => 'high']]]];
+$calls = [];
+check('monitor: първо пускане не праща нищо', $monitor->check('dev1', 1_000_000) === [] && count($calls) === 1);
+
+$responses = [['success' => true, 'result' => ['logs' => [
+    ['code' => 'alarm_lock', 'value' => 'pry', 'event_time' => 1_000_500],
+    ['code' => 'unlock_request', 'value' => '30', 'event_time' => 1_000_400],
+    ['code' => 'unlock_request', 'value' => '0', 'event_time' => 1_000_450],
+    ['code' => 'hijack', 'value' => 'true', 'event_time' => 1_000_600],
+    ['code' => 'battery_state', 'value' => 'low', 'event_time' => 1_000_700],
+]]]];
+$calls = [];
+$events = $monitor->check('dev1', 1_001_000);
+check('monitor: logs заявка', str_contains($calls[0]['url'], '/v1.0/devices/dev1/logs?codes=') && str_contains($calls[0]['url'], 'start_time=1000001') && str_contains($calls[0]['url'], 'type=7'));
+check('monitor: събития по ред и сериозност', array_column($events, 'severity') === ['info', 'critical', 'critical', 'warning']
+    && str_contains($events[1]['text'], 'разбиване') && str_contains($events[2]['text'], 'заплаха'));
+
+$responses = [['success' => true, 'result' => ['logs' => [['code' => 'battery_state', 'value' => 'low', 'event_time' => 1_001_500]]]]];
+$calls = [];
+check('monitor: ниска батерия не се повтаря', $monitor->check('dev1', 1_002_000) === [] && str_contains($calls[0]['url'], 'start_time=1001001'));
+
+$responses = [
+    ['success' => false, 'code' => 1106, 'msg' => 'permission deny'],
+    ['success' => true, 'result' => [['code' => 'alarm_lock', 'value' => 'wrong_password'], ['code' => 'battery_state', 'value' => 'high']]],
+];
+$calls = [];
+$events = $monitor->check('dev1', 1_003_000);
+check('monitor: fallback към статус при грешка в лога', array_column($events, 'text') === ['Аларма: Грешен код', 'Батерията е наред.']);
+
+$message = SmartLock\Mailer::buildMessage('a@x.bg', ['b@x.bg', 'c@x.bg'], 'Тема 🚨', "Ред 1\n.\nРед 3");
+[$head, $encodedBody] = explode("\r\n\r\n", $message, 2);
+check('mail: заглавия и UTF-8 тема', str_contains($head, "To: b@x.bg, c@x.bg") && str_contains($head, 'Subject: =?UTF-8?B?'.base64_encode('Тема 🚨').'?='));
+check('mail: тялото е base64 (без проблем с точка на ред)', base64_decode(str_replace("\r\n", '', $encodedBody)) === "Ред 1\n.\nРед 3");
+
 echo "Имена\n";
 $store = new SmartLock\NameStore($tmp.'/names.json');
 $store->set('dev1', 'unlock_fingerprint:11', ' Иван ');
